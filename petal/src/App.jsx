@@ -65,7 +65,12 @@ export default function App() {
   const [diaryTitle, setDiaryTitle] = useState('');
   const [diaryBody, setDiaryBody] = useState('');
   const [selectedCharm, setSelectedCharm] = useState(STICKER_CHARMS[0].emoji);
-  const [entries, setEntries] = useState([]);
+  const [entries, setEntries] = useState(() => {
+    const saved = localStorage.getItem('petal_entries');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [readingEntry, setReadingEntry] = useState(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -74,6 +79,10 @@ export default function App() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerIntervalRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem('petal_entries', JSON.stringify(entries));
+  }, [entries]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--desk-bg', activeTheme.deskBg);
@@ -139,6 +148,11 @@ export default function App() {
         month: 'short',
         day: 'numeric',
       }),
+      dateFormatted: new Date().toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      }),
       themeCover: activeTheme.cover,
       ribbonColor: activeTheme.ribbon,
     };
@@ -150,8 +164,10 @@ export default function App() {
     setRecordSeconds(0);
   };
 
-  const handleDeleteEntry = (entryId) => {
+  const handleDeleteEntry = (e, entryId) => {
+    e.stopPropagation();
     setEntries(entries.filter((entry) => entry.id !== entryId));
+    if (readingEntry?.id === entryId) setReadingEntry(null);
   };
 
   return (
@@ -170,7 +186,7 @@ export default function App() {
         fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
       }}
     >
-      {/* Top Header & Tactile Palette Bar */}
+      {/* Top Header */}
       <header className="max-w-2xl w-full flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 bg-white/80 backdrop-blur-md p-4 px-6 rounded-full border border-white/80 shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
         <div>
           <h1
@@ -209,9 +225,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Physical Notebook */}
+      {/* Main Physical Notebook Editor */}
       <main className="max-w-2xl w-full bg-[#fffefb] rounded-[38px] border-[7px] border-white relative overflow-hidden flex flex-col p-6 sm:p-10 mb-10 shadow-[0_20px_45px_rgba(61,43,39,0.07)]">
-        {/* Physical Ribbon Bookmark */}
         <div
           className="absolute -top-1 right-12 w-6 h-28 shadow-md rounded-b-md transition-colors duration-300"
           style={{ backgroundColor: activeTheme.ribbon }}
@@ -225,7 +240,6 @@ export default function App() {
           <div className="h-2 w-16 bg-[#eaddd7] rounded-full" />
         </div>
 
-        {/* Header Strip with Date moved safely away from ribbon */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f3e8e2] pb-4 mb-4 pr-16">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold text-[#8b6e68] uppercase tracking-wider">
@@ -249,7 +263,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Date styled in high-contrast solid black-brown */}
           <span className="text-xs font-bold text-[#3d2b27] bg-[#fbf3ef] px-3 py-1 rounded-full border border-[#ebd8d0]">
             {new Date().toLocaleDateString(undefined, {
               weekday: 'short',
@@ -351,6 +364,7 @@ export default function App() {
               {entries.length}
             </span>
           </h2>
+          <span className="text-[11px] text-[#8b6e68] italic">Click any entry to open & read</span>
         </div>
 
         {entries.length === 0 ? (
@@ -368,10 +382,11 @@ export default function App() {
             {entries.map((entry) => (
               <div
                 key={entry.id}
-                className="bg-[#fffefc] rounded-3xl p-6 border border-[#ece0d8] shadow-sm relative overflow-hidden transition-shadow hover:shadow-md"
+                onClick={() => setReadingEntry(entry)}
+                className="bg-[#fffefc] rounded-3xl p-6 border border-[#ece0d8] shadow-sm relative overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group"
               >
                 <div
-                  className="absolute top-0 left-0 bottom-0 w-3"
+                  className="absolute top-0 left-0 bottom-0 w-3 transition-all duration-200 group-hover:w-4"
                   style={{ backgroundColor: entry.themeCover }}
                 />
 
@@ -386,8 +401,9 @@ export default function App() {
                         {entry.timestamp}
                       </span>
                       <button
-                        onClick={() => handleDeleteEntry(entry.id)}
-                        className="text-[#baa39c] hover:text-red-500 text-sm transition-colors"
+                        onClick={(e) => handleDeleteEntry(e, entry.id)}
+                        className="text-[#baa39c] hover:text-red-500 text-sm transition-colors p-1"
+                        title="Delete entry"
                       >
                         ✕
                       </button>
@@ -396,30 +412,98 @@ export default function App() {
 
                   {entry.body && (
                     <p
-                      className="text-2xl text-[#5c4038] leading-relaxed whitespace-pre-wrap"
+                      className="text-xl text-[#5c4038] line-clamp-2 leading-relaxed"
                       style={{ fontFamily: "'Caveat', cursive, sans-serif" }}
                     >
                       {entry.body}
                     </p>
                   )}
 
-                  {entry.audioUrl && (
-                    <div className="pt-2 flex items-center gap-3 bg-[#fbf5f2] p-2.5 rounded-2xl border border-[#efe2dc] w-fit">
-                      <span className="text-sm">🎙️</span>
-                      <audio src={entry.audioUrl} controls className="h-7 w-56" />
-                      {entry.audioDuration && (
-                        <span className="text-[10px] font-mono text-[#8b6e68]">
-                          {entry.audioDuration}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between pt-1">
+                    {entry.audioUrl ? (
+                      <span className="text-xs bg-[#fbf5f2] px-2.5 py-1 rounded-full border border-[#ebd8d0] text-[#7c635d] flex items-center gap-1.5 font-medium">
+                        🎙️ Voice Note {entry.audioDuration && `(${entry.audioDuration})`}
+                      </span>
+                    ) : <span />}
+                    <span className="text-xs font-semibold text-[#b59d95] group-hover:text-[#e04b73] transition-colors flex items-center gap-1">
+                      Read Page →
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </section>
+
+      {/* Aesthetic Full Diary Reading Modal */}
+      {readingEntry && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
+          onClick={() => setReadingEntry(null)}
+        >
+          <div
+            className="max-w-xl w-full bg-[#fffefb] rounded-[36px] border-[8px] border-white shadow-2xl relative p-8 sm:p-12 overflow-hidden max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Ribbon Decoration */}
+            <div
+              className="absolute -top-1 right-12 w-6 h-24 shadow-md rounded-b-md"
+              style={{ backgroundColor: readingEntry.ribbonColor || activeTheme.ribbon }}
+            />
+
+            {/* Top Bar with Date & Close */}
+            <div className="flex items-center justify-between pb-4 border-b border-[#f3e8e2] mb-6 pr-14">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{readingEntry.charm}</span>
+                <span className="text-xs font-bold text-[#8b6e68] uppercase tracking-wider">
+                  {readingEntry.dateFormatted || readingEntry.timestamp}
+                </span>
+              </div>
+              <button
+                onClick={() => setReadingEntry(null)}
+                className="w-8 h-8 rounded-full bg-[#fbf5f2] border border-[#ebd8d0] text-[#5c4038] flex items-center justify-center hover:bg-red-50 hover:text-red-500 font-bold transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-2xl font-black text-[#3d2b27] mb-4">
+              {readingEntry.title}
+            </h3>
+
+            {/* Full Diary Page Writing */}
+            <div
+              className="overflow-y-auto pr-2 flex-1"
+              style={{
+                fontFamily: "'Caveat', cursive, sans-serif",
+                lineHeight: '2.3rem',
+                backgroundImage:
+                  'repeating-linear-gradient(transparent, transparent 35px, #f5ece7 35px, #f5ece7 37px)',
+                backgroundAttachment: 'local',
+              }}
+            >
+              <p className="text-2xl text-[#4a3531] whitespace-pre-wrap">
+                {readingEntry.body}
+              </p>
+            </div>
+
+            {/* Audio Vent playback inside the book */}
+            {readingEntry.audioUrl && (
+              <div className="mt-6 pt-4 border-t border-[#f3e7e2] flex items-center gap-3 bg-[#fbf5f2] p-3 rounded-2xl border border-[#ebd8d0]">
+                <span className="text-lg">🎙️</span>
+                <audio src={readingEntry.audioUrl} controls className="h-8 flex-1" />
+                {readingEntry.audioDuration && (
+                  <span className="text-xs font-mono text-[#8b6e68]">
+                    {readingEntry.audioDuration}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
