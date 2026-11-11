@@ -2,7 +2,7 @@ name: Deploy Petal to GitHub Pages
 
 on:
   push:
-    branches: ['main'] # Agar default branch 'master' hai toh yahan 'master' likhna
+    branches: ['main'] # Agar default branch master ho toh master rakhna
 
 permissions:
   contents: read
@@ -19,6 +19,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: petal
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +43,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: './petal/dist'
 
       - name: Deploy to GitHub Pages
         id: deployment
